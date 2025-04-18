@@ -59,7 +59,7 @@ void MainWindow::OnHello(wxCommandEvent& event)
     }
     wxString toPrint = "Below the list of COM ports (if any)\n";
     wxString result;
-    const wxString& port = "COM4";
+    const wxString& port = "COM7";
     unsigned long baudrate = 115200;
 
     try {
@@ -71,7 +71,6 @@ void MainWindow::OnHello(wxCommandEvent& event)
             result += "Connected to " + port + "\n";
             wxString rigolGetPort = rigol.getPort();
             rigol.write("*IDN?\r\n");
-            wxMilliSleep(1500);
             std::string response = rigol.read(1024);
 
             result += "rigolGetPort is: \"" + rigolGetPort + "\" andResponse:\n" + wxString::FromUTF8(response) + "\n";

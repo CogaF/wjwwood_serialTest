@@ -172,7 +172,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>serial.lib;$(VC_WJWWOOD_SERIAL)\Win32\Release;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>serial.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(VC_WJWWOOD_SERIAL)\Win32\Release;</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>

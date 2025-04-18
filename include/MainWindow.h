@@ -1,8 +1,8 @@
 #pragma once
 
 #include <wx/wx.h>
-#include "../include/App.h"
-#include "../include/Id.h"
+#include "App.h"
+#include "Id.h"
 #include <serial/serial.h>
 
 
