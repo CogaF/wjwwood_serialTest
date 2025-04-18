@@ -12,9 +12,9 @@ By default there build can be done both for 32 and 64 bit in Release, Debug and 
 
 ReleaseDll uses the dynamic build version of wxWidgets thus it must be build "shared" in case this options is going to be used.
 
-The other two are as they speak for themselves, Debug and Release libraries for both wxWidgets and wjwwod_serial.
+The other two are as they speak for themselves, Debug and Release libraries for both wxWidgets and wjwwood_serial.
 
-enviromantal variables must point to root folders of each library that must have the following structure:
+environmental variables must point to root folders of each library and must have the following structure:
 
 ---------------------------------------------------------------------------------------------------------------------------------
 VC_WJWWOOD_SERIAL must point to the folder that has the following structure:
