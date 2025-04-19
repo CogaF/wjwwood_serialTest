@@ -34,6 +34,13 @@
     <ClInclude Include="include\App.h" />
     <ClInclude Include="include\Id.h" />
     <ClInclude Include="include\MainWindow.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="wjwwood_serialTest.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="icon1.ico" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
