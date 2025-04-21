@@ -323,7 +323,7 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
         }
 
         if (serialPort_sp->isOpen()) {
-            for (uint8_t i = 0; i < 0x15; i++) {
+            for (uint8_t i = 0; i < 0xFE; i++) {
                 response.clear();
                 uint8_t shiftedValue = i;
                 int const msgSize = 12;        //SOH   addr  CM1   CM2   CM3   Len  STX    DAT1  DAT2  ETX   CRC   EOT
@@ -331,8 +331,21 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
                 wxString uCharMessageToWXs = BytesToWxString(&message[0], msgSize);
                 if (!serialPortName.empty()) {
                     serialPort_sp->write(message);
+                    serial::Timeout thisTimeout_1(15, 25, response.size(), 25, 0);
+                    serialPort_sp->setTimeout(thisTimeout_1);
+                    bool timeout = false;
+                    int maxMillis = 1750;
+                    int count = 0;
+                    int waitingMillis = 5;
+                    while (!timeout && !(serialPort_sp->available())) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(waitingMillis));
+                        count += waitingMillis;
+                        if (count >= maxMillis) {
+                            timeout = true;
+                        }
+                    }
                     //serliaPort_sp->waitReadable();
-                    //readBytes = serialPort_sp->read(response, 2094);
+                    readBytes = serialPort_sp->read(response, 2094);
                 }
                 else {
                     wxMessageBox("portname not selected");
@@ -340,10 +353,10 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
 
                 if (response.size() > 38 && readBytes > 38) {
                     interpretation = "";
-                    for (int i = 0; i < 16; ++i) {
-                        int value = static_cast<unsigned char>(response[9 + i * 2]) +
-                            (static_cast<unsigned char>(response[10 + i * 2]) << 8);
-                        interpretation += wxString::Format("A%02d = %d; ", i, value);
+                    for (int j = 0; j < 16; ++j) {
+                        int value = static_cast<unsigned char>(response[9 + j * 2]) +
+                            (static_cast<unsigned char>(response[10 + j * 2]) << 8);
+                        interpretation += wxString::Format("A%02d = %d; ", j, value);
                     }
                 }
                 int sizeOfVec = response.size();
@@ -512,7 +525,9 @@ void MainWindow::OnStartThread(wxCommandEvent& event) {
                         }
                         if (readBytes > 1) {
 #ifdef _DEBUG
-                            AddMessage(get_current_timestamp(), "", BytesToWxString(&response[0], response.size()), "");
+                            AddMessage(get_current_timestamp(), "", BytesToWxString(&response[0], response.size()), ""); 
+                            int randomMillis = getRandom(150);
+                            //std::this_thread::sleep_for(std::chrono::milliseconds(randomMillis));
                             thisSerialPort->write("received: ");
                             thisSerialPort->write(response);
 #endif
@@ -534,6 +549,13 @@ void MainWindow::OnStartThread(wxCommandEvent& event) {
         }).detach();  // Join to run it sequentially
     }
     wxYield();
+}
+
+int MainWindow::getRandom(int maxValue) {
+    static std::random_device rd;               // Seed
+    static std::mt19937 gen(rd());              // Mersenne Twister engine
+    std::uniform_int_distribution<> dist(0, maxValue);
+    return dist(gen);
 }
 
 void MainWindow::OnThreadResult(wxCommandEvent& event) {

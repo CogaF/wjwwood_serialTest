@@ -11,6 +11,7 @@
 #include <wx/event.h>
 #include <sstream>
 #include <iomanip>
+#include <random>
 #define MaxNrOfCMDs 25
 wxDEFINE_EVENT(wxEVT_THREAD_RESULT, wxCommandEvent);
 
@@ -59,4 +60,5 @@ private:
     void serliaPortsToChoices();
     wxString BytesToWxString(const unsigned char* data, size_t size); 
     std::vector<uint8_t> WxStringToBytes(const wxString& input);
+    int getRandom(int maxValue);
 };
