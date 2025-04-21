@@ -31,10 +31,13 @@ public:
     wxBoxSizer*     resultsSizer;
     //The RUN button
     wxButton*       runBT;
+    wxButton*       threadBT;
     wxArrayString   listOfPorts_wxArr;
     wxChoice*       listOfPorts_wxChoice;
     std::string     serialPortName;
-    serial::Serial* serliaPort_sp;
+    serial::Serial* serialPort_sp;
+    bool            quitThread = true;
+    bool            threadExists = false;
 
 private:
     void OnHello(wxCommandEvent& event);
@@ -46,6 +49,7 @@ private:
     void OnMouseMove(wxMouseEvent& event);
     void SelectAllItems();
     void OnButtonEvent(wxCommandEvent& event);
+    void OnStartThread(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
     void StartThread(const wxString& input, int commandIndex, bool sequentialStatus);
     void OnThreadResult(wxCommandEvent& event);

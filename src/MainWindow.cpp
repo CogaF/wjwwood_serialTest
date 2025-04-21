@@ -9,7 +9,7 @@ using namespace windowIDs;
 
 
 MainWindow::MainWindow()
-    : wxFrame(nullptr, wxID_ANY, "Hello World")
+    : wxFrame(nullptr, wxID_ANY, "Serial Comunication")
 {
     wxMenu* menuFile = new wxMenu;
     menuFile->Append(ID_Hello, "&Hello...\tCtrl-H",
@@ -40,13 +40,14 @@ MainWindow::MainWindow()
     Bind(wxEVT_MENU, &MainWindow::OnHello, this, ID_Hello);
     Bind(wxEVT_MENU, &MainWindow::OnAbout, this, wxID_ABOUT);
     Bind(wxEVT_MENU, &MainWindow::OnExit, this, wxID_EXIT);
-    Bind(wxEVT_BUTTON, &MainWindow::OnButtonEvent, this);
+    Bind(wxEVT_BUTTON, &MainWindow::OnButtonEvent, this, ID_RUN_COMMAND_BT);
+    Bind(wxEVT_BUTTON, &MainWindow::OnStartThread, this, ID_START_THREAD_BT);
     Bind(wxEVT_THREAD_RESULT, &MainWindow::OnThreadResult, this);
     Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnClose, this);
     resultList->Bind(wxEVT_KEY_DOWN, &MainWindow::OnKeyDown, this);
     resultList->Bind(wxEVT_MOTION, &MainWindow::OnMouseMove, this);
 
-
+    this->SetSize(960,450);
     wxIcon _frame_icon(wxICON(MAINICON));
     SetIcon(_frame_icon);
 
@@ -62,15 +63,16 @@ MainWindow::MainWindow()
     resultList->InsertColumn(2, "Received Message");
     resultList->InsertColumn(3, "RX Interpretation");
 
-    runBT = new wxButton(mainPanel, windowIDs::ID_RUN_COMMAND_BT, "Run command(s)", wxDefaultPosition, wxSize(-1, 40));
+    runBT = new wxButton(mainPanel, windowIDs::ID_RUN_COMMAND_BT, "Send Message(s)", wxDefaultPosition, wxSize(-1, 40));
+    threadBT = new wxButton(mainPanel, windowIDs::ID_START_THREAD_BT, "Create Listen Thread", wxDefaultPosition, wxSize(-1, 40));
     // Set the proportions: Message is 8 times the width of Timestamp
     int timestampWidth = ResultListWidth / 9;   // 1 part of the total 9 parts (timestamp + 8 * message)
     int messageWidth = timestampWidth * 6; // 8 parts for message
     // Set the column widths
-    resultList->SetColumnWidth(0, timestampWidth); // Timestamp column
-    resultList->SetColumnWidth(1, timestampWidth);   // Message column
-    resultList->SetColumnWidth(2, timestampWidth);   // Message column
-    resultList->SetColumnWidth(3, messageWidth);   // Message column
+    resultList->SetColumnWidth(0, timestampWidth);      // Timestamp column
+    resultList->SetColumnWidth(1, timestampWidth);      // Message column
+    resultList->SetColumnWidth(2, timestampWidth);      // Message column
+    resultList->SetColumnWidth(3, messageWidth);        // Message column
 
     serliaPortsToChoices();
 
@@ -81,6 +83,7 @@ MainWindow::MainWindow()
     resultsSizer->Add(resultList, 1, wxEXPAND | wxALL, 1);
 
     componentsSizer->Add(runBT, 3, wxEXPAND | wxALL, 1);
+    componentsSizer->Add(threadBT, 3, wxEXPAND | wxALL, 1);
     componentsSizer->Add(listOfPorts_wxChoice, 1, wxEXPAND | wxALL, 1);
     componentsSizer->Add(resultsSizer, 7, wxEXPAND | wxALL, 1);
 
@@ -88,6 +91,7 @@ MainWindow::MainWindow()
 
     mainSizer->Add(mainPanel);
 
+    serialPort_sp = new serial::Serial("", 115200, serial::Timeout::simpleTimeout(150));
     SetSizer(mainSizer);
     mainPanel->Show(true);
 
@@ -267,6 +271,8 @@ void MainWindow::OnClose(wxCloseEvent& event) {
     Destroy();
 }
 
+
+//Converts a wxString into vector of uint8_t
 std::vector<uint8_t> MainWindow::WxStringToBytes(const wxString& input)
 {
     std::vector<uint8_t> result;
@@ -281,7 +287,7 @@ std::vector<uint8_t> MainWindow::WxStringToBytes(const wxString& input)
     return result;
 }
 
-
+//Sends some message containing few bytes , the amount of messages sent can be changed in the for loop
 void MainWindow::OnButtonEvent(wxCommandEvent& event) {
 
     size_t readBytes = 0;
@@ -293,32 +299,40 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
     serialPortName = listOfPorts_wxChoice->GetString(listOfPorts_wxChoice->GetSelection());
     std::vector<uint8_t> response = { 0x00 };
     try {
-        serliaPort_sp = new serial::Serial(serialPortName, baudrate, serial::Timeout::simpleTimeout(150));
-        serliaPort_sp->setBytesize(serial::eightbits);
-        serliaPort_sp->setFlowcontrol(serial::flowcontrol_none);
-        serliaPort_sp->setStopbits(serial::stopbits_one);
-        
         /*
-                    uint32_t inter_byte_timeout_=0,
-                    uint32_t read_timeout_constant_=0,
-                    uint32_t read_timeout_multiplier_=0,
-                    uint32_t write_timeout_constant_=0,
-                    uint32_t write_timeout_multiplier_=0)
+            Attention here, as a lazy person i didn't read info and only found after "unexpected" behaviour 
+            that the creation of the serial port, tries to open the port in case it hase a port name.
+            thus calling open() will give the exception of port open.
+            i made a change to the library:
+            when trying to open and it is already open it will get closed and reopened
         */
-        serial::Timeout thisTimeout(3, 5, 0, 5, 0);
-        serliaPort_sp->setTimeout(thisTimeout);
+        if (serialPort_sp == nullptr) {
+            serialPort_sp  = new serial::Serial("", baudrate, serial::Timeout::simpleTimeout(150));
+        }
 
-        if (serliaPort_sp->isOpen()) {
-            for (uint8_t i = 0; i < 0xFF; i++) {
+
+        serialPort_sp->setPort(serialPortName);
+        serialPort_sp->setBytesize(serial::eightbits);
+        serialPort_sp->setFlowcontrol(serial::flowcontrol_none);
+        serialPort_sp->setStopbits(serial::stopbits_one);
+
+        serial::Timeout thisTimeout(15, 25, 0, 25, 0);
+        serialPort_sp->setTimeout(thisTimeout);
+        if (!serialPort_sp->isOpen()) {
+            serialPort_sp->open();
+        }
+
+        if (serialPort_sp->isOpen()) {
+            for (uint8_t i = 0; i < 0x15; i++) {
                 response.clear();
                 uint8_t shiftedValue = i;
                 int const msgSize = 12;        //SOH   addr  CM1   CM2   CM3   Len  STX    DAT1  DAT2  ETX   CRC   EOT
-                std::vector<uint8_t> message = { 0x01, 0xff, 0x07, 0x00, 0x00, 12,  0x02 ,   i,    i,  0x03, 0xF4, 0x04 };
+                std::vector<uint8_t> message = { 0x01, 0xff, 0x0A, 0x01, 0x00, 12,  0x02 ,   i,    i,  0x03, 0xF8, 0x04 };
                 wxString uCharMessageToWXs = BytesToWxString(&message[0], msgSize);
                 if (!serialPortName.empty()) {
-                    serliaPort_sp->write(message);
+                    serialPort_sp->write(message);
                     //serliaPort_sp->waitReadable();
-                    readBytes = serliaPort_sp->read(response, 256);
+                    //readBytes = serialPort_sp->read(response, 2094);
                 }
                 else {
                     wxMessageBox("portname not selected");
@@ -340,19 +354,20 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
                 AddMessage(get_current_timestamp(), uCharMessageToWXs, received, interpretation);
                 wxYield();
             }
-            serliaPort_sp->close();
+            //serialPort_sp->close();
         }
         else {
-            response = WxStringToBytes(wxString("Failed to open port: " + serliaPort_sp->getPort() + "\n"));
+            response = WxStringToBytes(wxString("Failed to open port: " + serialPort_sp->getPort() + "\n"));
         }
     }
     catch (const std::exception& e) {
         response = WxStringToBytes(wxString("Error: " + wxString::FromUTF8(e.what()) + "\n"));
         AddMessage(get_current_timestamp(), BytesToWxString(&response[0], response.size()), received, interpretation);
     }
+    
 }
 
-
+//Converts bytes to string, except ascii characters all the other will be printed with h suffix e.g. 0x00 = h00
 wxString MainWindow::BytesToWxString(const unsigned char* data, size_t size)
 {
     std::ostringstream oss;
@@ -460,7 +475,66 @@ void MainWindow::StartThread(const wxString& input, int CommandIndex, bool seque
 #endif
 }
 
+//Starts a detached thread that prints every received message and sends it back as received: *** 
+void MainWindow::OnStartThread(wxCommandEvent& event) {
+    quitThread = !quitThread;
+    if (!quitThread) {
+        AddMessage(get_current_timestamp(), "Thread will be active", "", "");
+    }else{
+        AddMessage(get_current_timestamp(), "Thread will deactivate", "", "");
+    }
+    bool *thiSquitThread = &quitThread;
+    serial::Serial* thisSerialPort = serialPort_sp;
+    if(!threadExists){
+        threadExists = true;
+        std::thread([this, thiSquitThread, thisSerialPort]() {
+            size_t readBytes = 0;
+            std::vector<uint8_t> response = { 0x00 };
+            try {
+                unsigned long baudrate = 115200;
+                wxString serialPortName = listOfPorts_wxChoice->GetString(listOfPorts_wxChoice->GetSelection());
 
+                thisSerialPort->setPort(serialPortName.ToStdString());
+                thisSerialPort->setBytesize(serial::eightbits);
+                thisSerialPort->setFlowcontrol(serial::flowcontrol_none);
+                thisSerialPort->setStopbits(serial::stopbits_one);
+
+                serial::Timeout thisTimeout(7, 15, 0, 15, 0);
+                thisSerialPort->setTimeout(thisTimeout);
+                if (!thisSerialPort->isOpen()) {
+                    thisSerialPort->open();
+                }
+                if (!serialPortName.empty()) {
+                    while (!(*thiSquitThread)) {
+                        wxYield();
+                        while (thisSerialPort->available()) {
+                            readBytes = thisSerialPort->read(response, 256);
+                        }
+                        if (readBytes > 1) {
+#ifdef _DEBUG
+                            AddMessage(get_current_timestamp(), "", BytesToWxString(&response[0], response.size()), "");
+                            thisSerialPort->write("received: ");
+                            thisSerialPort->write(response);
+#endif
+                            readBytes = 0;
+                            response = { 0x00 };
+                        }
+                    }
+                    thisSerialPort->close();
+                    threadExists = false; 
+                    *thiSquitThread = true;
+                }
+            }
+            
+            catch (const std::exception& e) {
+                response = WxStringToBytes(wxString("Error: " + wxString::FromUTF8(e.what()) + "\n"));
+                AddMessage(get_current_timestamp(), BytesToWxString(&response[0], response.size()), "", "");
+                threadExists = false;
+            }
+        }).detach();  // Join to run it sequentially
+    }
+    wxYield();
+}
 
 void MainWindow::OnThreadResult(wxCommandEvent& event) {
 }

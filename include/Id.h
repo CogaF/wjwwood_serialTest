@@ -18,6 +18,7 @@ namespace windowIDs {
         ID_MAIN_PANEL,
         ID_COMMAND_LIST,
         ID_RUN_COMMAND_BT,
+        ID_START_THREAD_BT,
     };
 }
 
