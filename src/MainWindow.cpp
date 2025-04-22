@@ -27,27 +27,27 @@ MainWindow::MainWindow()
     SetMenuBar(menuBar);
 
     CreateStatusBar();
-    mainPanel = new wxPanel(this, windowIDs::ID_MAIN_PANEL);
     int ResultListWidth = 1950;
+    // Set the proportions: Message is 8 times the width of Timestamp
+    int timestampWidth = ResultListWidth / 9;   // 1 part of the total 9 parts (timestamp + 8 * message)
+    int messageWidth = timestampWidth * 6; // 8 parts for message
+
+    //Sizer for list 
     resultsSizer = new wxBoxSizer(wxVERTICAL);
+
+    //Main sizer do i need this?
     mainSizer = new wxBoxSizer(wxVERTICAL);
-    resultsSizer = new wxBoxSizer(wxVERTICAL);
-    mainSizer = new wxBoxSizer(wxVERTICAL);
+
+    //sizer for all gui componens as: two buttons the drop down list of ports, and the result list
     componentsSizer = new wxBoxSizer(wxVERTICAL);
-    resultList = new wxListCtrl(mainPanel, windowIDs::ID_COMMAND_LIST, wxDefaultPosition, wxSize(ResultListWidth, 250),
+
+    mainPanel = new wxPanel(this, windowIDs::ID_MAIN_PANEL);
+
+    resultList = new wxListCtrl(mainPanel, windowIDs::ID_COMMAND_LIST, wxDefaultPosition, wxDefaultSize,
         wxLC_REPORT | wxLC_HRULES | wxLC_VRULES | wxLC_AUTOARRANGE);
 
-    Bind(wxEVT_MENU, &MainWindow::OnHello, this, ID_Hello);
-    Bind(wxEVT_MENU, &MainWindow::OnAbout, this, wxID_ABOUT);
-    Bind(wxEVT_MENU, &MainWindow::OnExit, this, wxID_EXIT);
-    Bind(wxEVT_BUTTON, &MainWindow::OnButtonEvent, this, ID_RUN_COMMAND_BT);
-    Bind(wxEVT_BUTTON, &MainWindow::OnStartThread, this, ID_START_THREAD_BT);
-    Bind(wxEVT_THREAD_RESULT, &MainWindow::OnThreadResult, this);
-    Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnClose, this);
-    resultList->Bind(wxEVT_KEY_DOWN, &MainWindow::OnKeyDown, this);
-    resultList->Bind(wxEVT_MOTION, &MainWindow::OnMouseMove, this);
 
-    this->SetSize(960,450);
+    SetSize(960,450);
     wxIcon _frame_icon(wxICON(MAINICON));
     SetIcon(_frame_icon);
 
@@ -62,39 +62,51 @@ MainWindow::MainWindow()
     resultList->InsertColumn(1, "Sent Message");
     resultList->InsertColumn(2, "Received Message");
     resultList->InsertColumn(3, "RX Interpretation");
-
-    runBT = new wxButton(mainPanel, windowIDs::ID_RUN_COMMAND_BT, "Send Message(s)", wxDefaultPosition, wxSize(-1, 40));
-    threadBT = new wxButton(mainPanel, windowIDs::ID_START_THREAD_BT, "Create Listen Thread", wxDefaultPosition, wxSize(-1, 40));
-    // Set the proportions: Message is 8 times the width of Timestamp
-    int timestampWidth = ResultListWidth / 9;   // 1 part of the total 9 parts (timestamp + 8 * message)
-    int messageWidth = timestampWidth * 6; // 8 parts for message
     // Set the column widths
     resultList->SetColumnWidth(0, timestampWidth);      // Timestamp column
     resultList->SetColumnWidth(1, timestampWidth);      // Message column
     resultList->SetColumnWidth(2, timestampWidth);      // Message column
     resultList->SetColumnWidth(3, messageWidth);        // Message column
 
+    runBT = new wxButton(mainPanel, windowIDs::ID_RUN_COMMAND_BT, "Send Message(s)", wxDefaultPosition, wxDefaultSize);
+    threadBT = new wxButton(mainPanel, windowIDs::ID_START_THREAD_BT, "Create Listen Thread", wxDefaultPosition, wxDefaultSize);
+
+
+
     serliaPortsToChoices();
 
-    listOfPorts_wxChoice = new wxChoice(mainPanel, wxID_ANY, wxPoint(50, 50), wxSize(150, -1), listOfPorts_wxArr);
-    if (listOfPorts_wxArr.size() >= 4) {
-        listOfPorts_wxChoice->SetSelection(2);
+    listOfPorts_wxChoice = new wxChoice(mainPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, listOfPorts_wxArr);
+    if (listOfPorts_wxArr.size() >= 1) {
+        listOfPorts_wxChoice->SetSelection(0);
     }
+
+    serialPort_sp = new serial::Serial("", 115200, serial::Timeout::simpleTimeout(150));
+
     resultsSizer->Add(resultList, 1, wxEXPAND | wxALL, 1);
 
-    componentsSizer->Add(runBT, 3, wxEXPAND | wxALL, 1);
-    componentsSizer->Add(threadBT, 3, wxEXPAND | wxALL, 1);
-    componentsSizer->Add(listOfPorts_wxChoice, 1, wxEXPAND | wxALL, 1);
-    componentsSizer->Add(resultsSizer, 7, wxEXPAND | wxALL, 1);
+    componentsSizer->Add(runBT, 0, wxEXPAND | wxALL, 1);
+    componentsSizer->Add(threadBT, 0, wxEXPAND | wxALL, 1);
+    componentsSizer->Add(listOfPorts_wxChoice, 0, wxEXPAND | wxALL, 1);
+    componentsSizer->Add(resultsSizer, 1, wxEXPAND | wxALL, 1);
 
     mainPanel->SetSizer(componentsSizer);
 
-    mainSizer->Add(mainPanel);
+    mainSizer->Add(mainPanel, 1, wxEXPAND | wxALL, 0);
 
-    serialPort_sp = new serial::Serial("", 115200, serial::Timeout::simpleTimeout(150));
+    //SetSizer(componentsSizer);
     SetSizer(mainSizer);
     mainPanel->Show(true);
 
+    //Bindings palced at the end to avoid addin new bindings in position where components aren't created yet
+    Bind(wxEVT_MENU, &MainWindow::OnHello, this, ID_Hello);
+    Bind(wxEVT_MENU, &MainWindow::OnAbout, this, wxID_ABOUT);
+    Bind(wxEVT_MENU, &MainWindow::OnExit, this, wxID_EXIT);
+    Bind(wxEVT_BUTTON, &MainWindow::OnButtonEvent, this, ID_RUN_COMMAND_BT);
+    Bind(wxEVT_BUTTON, &MainWindow::OnStartThread, this, ID_START_THREAD_BT);
+    Bind(wxEVT_THREAD_RESULT, &MainWindow::OnThreadResult, this);
+    Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnClose, this);
+    resultList->Bind(wxEVT_KEY_DOWN, &MainWindow::OnKeyDown, this);
+    resultList->Bind(wxEVT_MOTION, &MainWindow::OnMouseMove, this);
 
 }
 
@@ -343,6 +355,8 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
                         if (count >= maxMillis) {
                             timeout = true;
                         }
+                        //this make gui responsive while cycling in while for timout
+                        wxYield();
                     }
                     //serliaPort_sp->waitReadable();
                     readBytes = serialPort_sp->read(response, 2094);
