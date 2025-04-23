@@ -343,7 +343,8 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
                 wxString uCharMessageToWXs = BytesToWxString(&message[0], msgSize);
                 if (!serialPortName.empty()) {
                     serialPort_sp->write(message);
-                    serial::Timeout thisTimeout_1(15, 25, response.size(), 25, 0);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+                    serial::Timeout thisTimeout_1(1, 3, 0, 3, 0);
                     serialPort_sp->setTimeout(thisTimeout_1);
                     bool timeout = false;
                     int maxMillis = 1750;
@@ -526,7 +527,7 @@ void MainWindow::OnStartThread(wxCommandEvent& event) {
                 thisSerialPort->setFlowcontrol(serial::flowcontrol_none);
                 thisSerialPort->setStopbits(serial::stopbits_one);
 
-                serial::Timeout thisTimeout(7, 15, 0, 15, 0);
+                serial::Timeout thisTimeout(1, 3, 0, 3, 0);
                 thisSerialPort->setTimeout(thisTimeout);
                 if (!thisSerialPort->isOpen()) {
                     thisSerialPort->open();
@@ -538,8 +539,9 @@ void MainWindow::OnStartThread(wxCommandEvent& event) {
                             readBytes = thisSerialPort->read(response, 256);
                         }
                         if (readBytes > 1) {
+                            AddMessage(get_current_timestamp(), "", BytesToWxString(&response[0], response.size()), "");
 #ifdef _DEBUG
-                            AddMessage(get_current_timestamp(), "", BytesToWxString(&response[0], response.size()), ""); 
+                            //AddMessage(get_current_timestamp(), "", BytesToWxString(&response[0], response.size()), ""); 
                             int randomMillis = getRandom(150);
                             //std::this_thread::sleep_for(std::chrono::milliseconds(randomMillis));
                             thisSerialPort->write("received: ");
