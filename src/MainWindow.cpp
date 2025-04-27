@@ -97,6 +97,8 @@ MainWindow::MainWindow()
     SetSizer(mainSizer);
     mainPanel->Show(true);
 
+    thisCRC8 = new CRC8();
+
     //Bindings palced at the end to avoid addin new bindings in position where components aren't created yet
     Bind(wxEVT_MENU, &MainWindow::OnHello, this, ID_Hello);
     Bind(wxEVT_MENU, &MainWindow::OnAbout, this, wxID_ABOUT);
@@ -107,7 +109,7 @@ MainWindow::MainWindow()
     Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnClose, this);
     resultList->Bind(wxEVT_KEY_DOWN, &MainWindow::OnKeyDown, this);
     resultList->Bind(wxEVT_MOTION, &MainWindow::OnMouseMove, this);
-
+    
 }
 
 void MainWindow::OnExit(wxCommandEvent& event)
@@ -335,51 +337,79 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
         }
 
         if (serialPort_sp->isOpen()) {
-            for (uint8_t i = 0; i < 0xFE; i++) {
+            for (uint8_t i = 0; i <= 0xFE; i++) {
                 response.clear();
                 uint8_t shiftedValue = i;
                 int const msgSize = 12;        //SOH   addr  CM1   CM2   CM3   Len  STX    DAT1  DAT2  ETX   CRC   EOT
                 std::vector<uint8_t> message = { 0x01, 0xff, 0x0A, 0x01, 0x00, 12,  0x02 ,   i,    i,  0x03, 0xF8, 0x04 };
-                wxString uCharMessageToWXs = BytesToWxString(&message[0], msgSize);
-                if (!serialPortName.empty()) {
-                    serialPort_sp->write(message);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(25));
-                    serial::Timeout thisTimeout_1(1, 3, 0, 3, 0);
-                    serialPort_sp->setTimeout(thisTimeout_1);
-                    bool timeout = false;
-                    int maxMillis = 1750;
-                    int count = 0;
-                    int waitingMillis = 5;
-                    while (!timeout && !(serialPort_sp->available())) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(waitingMillis));
-                        count += waitingMillis;
-                        if (count >= maxMillis) {
-                            timeout = true;
-                        }
-                        //this make gui responsive while cycling in while for timout
-                        wxYield();
-                    }
-                    //serliaPort_sp->waitReadable();
-                    readBytes = serialPort_sp->read(response, 2094);
-                }
-                else {
-                    wxMessageBox("portname not selected");
-                }
 
-                if (response.size() > 38 && readBytes > 38) {
-                    interpretation = "";
-                    for (int j = 0; j < 16; ++j) {
-                        int value = static_cast<unsigned char>(response[9 + j * 2]) +
-                            (static_cast<unsigned char>(response[10 + j * 2]) << 8);
-                        interpretation += wxString::Format("A%02d = %d; ", j, value);
+
+
+                int* messageSize = new int(message.size());
+
+                u8* arrayMessage = new u8[*messageSize];
+                std::copy(message.begin(), message.end(), arrayMessage);
+                thisCRC8->add(arrayMessage, message.size()-2);
+
+                uint8_t thisCrc = getCRC_test((char*) &arrayMessage[0], messageSize);
+                message.at(message.size() - 2) = thisCrc;
+
+                //int const msgSize = 12;           //SOH   addr  CM1   CM2   CM3   Len  STX    DAT1  DAT2  ETX   CRC   EOT
+                std::vector<uint8_t> messageOrig = { 0x01, 0xff, 0x01, 0x0A, 0x00, 12,  0x02 ,   i,    i,  0x03, 0xF8, 0x04 };
+
+                int* messageSizeOrig = new int(messageOrig.size());
+                char* charArrayOrig = new char[*messageSizeOrig];
+                std::copy(messageOrig.begin(), messageOrig.end(), charArrayOrig);
+
+                uint8_t thisCrcOrig = getCRC_test( &charArrayOrig[0], messageSizeOrig);
+                messageOrig.at(message.size() - 2) = thisCrcOrig;
+
+                wxString uCharMessageToWXs = BytesToWxString(&message[0], msgSize);
+                wxString uCharMessageToWXs_orig = BytesToWxString(&messageOrig[0], msgSize);
+                bool debugWithNoSerial = true;
+                if (!debugWithNoSerial) {
+                    if (!serialPortName.empty()) {
+                        serialPort_sp->write(message);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+                        serial::Timeout thisTimeout_1(1, 3, 0, 3, 0);
+                        serialPort_sp->setTimeout(thisTimeout_1);
+                        bool timeout = false;
+                        int maxMillis = 1750;
+                        int count = 0;
+                        int waitingMillis = 5;
+                        while (!timeout && !(serialPort_sp->available())) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(waitingMillis));
+                            count += waitingMillis;
+                            if (count >= maxMillis) {
+                                timeout = true;
+                            }
+                            //this make gui responsive while cycling in while for timout
+                            wxYield();
+                        }
+                        //serliaPort_sp->waitReadable();
+                        readBytes = serialPort_sp->read(response, 2094);
+                    }
+                    else {
+                        wxMessageBox("portname not selected");
+                    }
+
+                    if (response.size() > 38 && readBytes > 38) {
+                        interpretation = "";
+                        for (int j = 0; j < 16; ++j) {
+                            int value = static_cast<unsigned char>(response[9 + j * 2]) +
+                                (static_cast<unsigned char>(response[10 + j * 2]) << 8);
+                            interpretation += wxString::Format("A%02d = %d; ", j, value);
+                        }
+                    }
+                    int sizeOfVec = response.size();
+                    if (sizeOfVec > 0) {
+                        received = BytesToWxStringASCII(&response[0], sizeOfVec);
                     }
                 }
-                int sizeOfVec = response.size();
-                if (sizeOfVec > 0) {
-                    received = BytesToWxString(&response[0], sizeOfVec);
-                }
+                //received = BytesToWxString(&message[0], messageSize);
                 //Printing a message to list to keep track
                 AddMessage(get_current_timestamp(), uCharMessageToWXs, received, interpretation);
+                AddMessage(get_current_timestamp(), uCharMessageToWXs_orig, received, interpretation);
                 wxYield();
             }
             //serialPort_sp->close();
@@ -396,26 +426,37 @@ void MainWindow::OnButtonEvent(wxCommandEvent& event) {
 }
 
 //Converts bytes to string, except ascii characters all the other will be printed with h suffix e.g. 0x00 = h00
-wxString MainWindow::BytesToWxString(const unsigned char* data, size_t size)
+wxString MainWindow::BytesToWxStringASCII(const unsigned char* data, size_t size)
 {
-    std::ostringstream oss;
+    wxString toReturn = "";
 
     for (size_t i = 0; i < size; ++i)
     {
-        unsigned char byte = data[i];
+        unsigned char _byte = data[i];
 
-        if (byte >= 0x20 && byte <= 0x7E) // Printable ASCII
+        if (_byte >= 0x20 && _byte <= 0x7E) // Printable ASCII
         {
-            oss << static_cast<char>(byte);
+
+            toReturn += wxString::Format("-%c", _byte);
         }
         else
         {
-            oss << " h" << std::hex << std::uppercase
-                << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+            toReturn += wxString::Format(" x%02X", _byte);
         }
     }
 
-    return wxString(oss.str());
+    return toReturn;
+}
+
+//Converts bytes to string, printed with x suffix e.g. 0x00 = " x00"
+wxString MainWindow::BytesToWxString(const unsigned char* data, size_t size)
+{
+    wxString toReturn = "";
+    for (size_t i = 0; i < size; ++i)
+    {
+        toReturn += wxString::Format(" x%02X", data[i]);
+    }
+    return toReturn;
 }
 
 
@@ -539,13 +580,13 @@ void MainWindow::OnStartThread(wxCommandEvent& event) {
                             readBytes = thisSerialPort->read(response, 256);
                         }
                         if (readBytes > 1) {
-                            AddMessage(get_current_timestamp(), "", BytesToWxString(&response[0], response.size()), "");
+                            AddMessage(get_current_timestamp(), "", BytesToWxStringASCII(&response[0], response.size()), "");
 #ifdef _DEBUG
                             //AddMessage(get_current_timestamp(), "", BytesToWxString(&response[0], response.size()), ""); 
                             int randomMillis = getRandom(150);
                             //std::this_thread::sleep_for(std::chrono::milliseconds(randomMillis));
-                            thisSerialPort->write("received: ");
-                            thisSerialPort->write(response);
+                            //thisSerialPort->write("received: ");
+                            //thisSerialPort->write(response);
 #endif
                             readBytes = 0;
                             response = { 0x00 };
@@ -575,4 +616,66 @@ int MainWindow::getRandom(int maxValue) {
 }
 
 void MainWindow::OnThreadResult(wxCommandEvent& event) {
+}
+
+
+
+uint8_t  MainWindow::getCRC(uint8_t* const thisMsgPtr, uint8_t* const thisSizePtr) {
+
+    thisCRC8->restart();
+
+    for (int i = 0; i < (*thisSizePtr - 2); i++) {
+        thisCRC8->add(*(thisMsgPtr + i));
+    }
+    return thisCRC8->calc();
+
+}
+
+uint8_t  MainWindow::getCRC_test(char* const thisMsgPtr, int* const thisSizePtr) {
+
+    thisCRC8->restart();
+    for (int i = 0; i < (*thisSizePtr - 2); i++) {
+        thisCRC8->add((uint8_t)*(thisMsgPtr + i));
+    }
+    return thisCRC8->calc();
+
+}
+
+bool MainWindow::addCRC(uint8_t* const thisMsgPtr, uint8_t* const thisSizePtr) {
+    thisCRC8->restart();
+    bool toReturnBool = false;
+    u8 myCRC = 0x00;
+    thisCRC8->add(thisMsgPtr, (*thisSizePtr - 3));
+    myCRC = thisCRC8->calc();
+
+    *(thisMsgPtr + *thisSizePtr - 2) = myCRC;
+    *(thisMsgPtr + *thisSizePtr - 1) = _EOT;
+
+    toReturnBool = true;
+    return true;
+}
+bool  MainWindow::checkCRC(uint8_t* const thisMsgPtr, uint8_t* const thisSizePtr) {
+    thisCRC8->restart();
+    bool toReturnBool = false;
+    u8 myCRC = 0x00;
+    u8 thisrxCRC = *(thisMsgPtr + *thisSizePtr - 2);
+
+    // for(int i = 0; i <= (*thisrxSizePtr-3); i++){
+    //     myCRC = myCRC xor *(thisrxPtr + i);
+    // }
+
+
+    thisCRC8->add(thisMsgPtr, (*thisMsgPtr - 3));
+    myCRC = thisCRC8->calc();
+
+
+    if (myCRC == thisrxCRC) {
+        toReturnBool = true;
+    }
+
+
+    // Serial.print(thisrxCRCPtr);
+    // Serial.print(myCRC);
+    return toReturnBool;
+
 }
